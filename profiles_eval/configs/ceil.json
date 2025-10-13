@@ -1,0 +1,19 @@
+{
+  "instrument_info": {
+    "name": "CEIL (CL31)"
+  },
+  "variables": {
+    "time": "time",
+    "range": "range",
+    "attenuated_backscatter": "backscatter"
+  },
+  "coordinates": {
+    "time": "time",
+    "range": "range"
+  },
+  "units": {
+    "time": "sec",
+    "range": "m",
+    "attenuated_backscatter": "1/(sr*km*10000)"
+  }
+}
