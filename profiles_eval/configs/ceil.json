@@ -1,6 +1,9 @@
 {
   "instrument_info": {
-    "name": "CEIL (CL31)"
+    "name": "CEIL (CL31)",
+    "instrument_class": "ceil10m",
+    "level": "b1"
+
   },
   "variables": {
     "time": "time",

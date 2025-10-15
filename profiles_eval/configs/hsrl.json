@@ -1,6 +1,8 @@
 {
   "instrument_info": {
-    "name": "HSRL"
+    "name": "HSRL",
+    "instrument_class": "hsrl",
+    "level": "a1"
   },
   "variables": {
     "time": "time",

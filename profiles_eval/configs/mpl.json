@@ -1,6 +1,9 @@
 {
   "instrument_info": {
-    "name": "MPL"
+    "name": "MPL",
+    "instrument_class": "mplcmaskml",
+    "level": "c1"
+
   },
   "variables": {
     "time": "time",

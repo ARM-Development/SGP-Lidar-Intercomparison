@@ -1,6 +1,8 @@
 {
   "instrument_info": {
-    "name": "RL"
+    "name": "RL",
+    "instrument_class": "rlproffex1thor",
+    "level": "c0"
   },
   "variables": {
     "time": "time",
