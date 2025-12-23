@@ -1,0 +1,42 @@
+{
+  "instrument_info": {
+    "name": "MPL",
+    "instrument_class": "mplcmaskml",
+    "level": "c1"
+
+  },
+  "variables": {
+    "time": "time",
+    "range": "height",
+    "attenuated_backscatter": "range_corrected_backscatter",
+    "qc_preprocess_backscatter": "qc_preprocess_backscatter",
+    "linear_depol_ratio": "linear_depol_ratio",
+    "qc_linear_depol_ratio": "qc_linear_depol_ratio",
+    "feature_mask": "cloud_mask",
+    "qc_feature_mask": "qc_cloud_mask",
+    "feature_confidence": "cloud_mask_confidence",
+    "cloud_base": "cloud_base",
+    "cloud_top": "cloud_top",
+    "num_cloud_layers": "num_cloud_layers",
+    "qc_num_cloud_layers": "qc_num_cloud_layers"
+  },
+  "coordinates": {
+    "time": "time",
+    "range": "height"
+  },
+  "units": {
+    "time": "sec",
+    "range": "km",
+    "attenuated_backscatter": "km^2*count/us",
+    "qc_preprocess_backscatter": "1",
+    "linear_depol_ratio": "1",
+    "qc_linear_depol_ratio": "1",
+    "cloud_mask": "1",
+    "qc_cloud_mask": "1",
+    "cloud_mask_confidence": "1",
+    "cloud_base": "km",
+    "cloud_top": "km",
+    "num_cloud_layers": "1",
+    "qc_num_cloud_layers": "1"
+  }
+}

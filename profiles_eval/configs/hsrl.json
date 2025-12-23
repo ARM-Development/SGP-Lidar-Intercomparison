@@ -1,0 +1,43 @@
+{
+  "instrument_info": {
+    "name": "HSRL",
+    "instrument_class": "hsrl",
+    "level": "a1"
+  },
+  "variables": {
+    "time": "time",
+    "range": "range",
+    "optical_depth": "od_aerosol",
+    "molecular_attenuated_backscatter": "atten_beta_r_backscatter",
+    "attenuated_backscatter": "atten_beta_a_backscatter",
+    "attenuated_backscatter_1064nm": "atten_beta_a_1064nm_backscatter",
+    "particulate_backscatter": "beta_a_backscatter",
+    "particulate_backscatter_1064nm": "beta_a_1064_backscatter",
+    "particulate_extinction": "extinction_aerosol",
+    "linear_depol_ratio": "linear_depol_ratio",
+    "linear_depol_ratio_1064nm": "linear_depol_1064",
+    "molecular_signal_to_noise": "molecular_signal_to_noise",
+    "particulate_backscatter_signal_to_noise": "particulate_backscatter_signal_to_noise",
+    "color_ratio": "color_ratio"
+  },
+  "coordinates": {
+    "time": "time",
+    "range": "range"
+  },
+  "units": {
+    "time": "sec",
+    "range": "m",
+    "optical_depth": "1",
+    "molecular_attenuated_backscatter": "1/(m*sr)",
+    "attenuated_backscatter": "1/(m*sr)",
+    "attenuated_backscatter_1064nm": "1/(m*sr)",
+    "particulate_backscatter": "1/(m*sr)",
+    "particulate_backscatter_1064nm": "1/(m*sr)",
+    "particulate_extinction": "1/m",
+    "linear_depol_ratio": "1",
+    "linear_depol_ratio_1064nm": "1",
+    "molecular_signal_to_noise": "1",
+    "particulate_backscatter_signal_to_noise": "1",
+    "color_ratio": "1"
+  }
+}

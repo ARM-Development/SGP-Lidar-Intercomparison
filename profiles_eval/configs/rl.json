@@ -1,0 +1,40 @@
+{
+  "instrument_info": {
+    "name": "RL",
+    "instrument_class": "rlproffex1thor",
+    "level": "c0"
+  },
+  "variables": {
+    "time": "time",
+    "range": "height_high",
+    "range_low": "height_low",
+    "scattering_ratio": "scattering_ratio_e",
+    "qc_scattering_ratio": "qc_scattering_ratio_e",
+    "particulate_backscatter": "particulate_backscatter_be",
+    "particulate_extinction": "extinction_be",
+    "lidar_ratio": "lidar_ratio_be",
+    "linear_depol_ratio": "depolarization_ratio",
+    "source_lidar_ratio": "source_lidar_ratio_be",
+    "feature_mask": "feature_mask",
+    "feature_mask_confidence": "detection_confidence_score_total"
+  },
+  "coordinates": {
+    "time": "time",
+    "range": "height_high",
+    "range_low": "height_low"
+  },
+  "units": {
+    "time": "sec",
+    "range": "km",
+    "range_low": "km",
+    "scattering_ratio": "1",
+    "qc_scattering_ratio": "1",
+    "particulate_backscatter": "1/(km*sr)",
+    "particulate_extinction": "1/km",
+    "lidar_ratio": "sr",
+    "linear_depol_ratio": "1",
+    "source_lidar_ratio": "1",
+    "feature_mask": "1",
+    "feature_mask_confidence": "1"
+  }
+}
