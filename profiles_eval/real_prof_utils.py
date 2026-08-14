@@ -114,7 +114,7 @@ def interpolate_data(
     step_ns = int(time_step / np.timedelta64(1, "ns"))
     t_min_ns = time_min.astype("datetime64[ns]").astype(np.int64)
     t_max_ns = time_max.astype("datetime64[ns]").astype(np.int64)
-    out_time = (np.arange(t_min_ns, t_max_ns + step_ns, step_ns)
+    out_time = (np.arange(t_min_ns, t_max_ns, step_ns)
                   .astype("datetime64[ns]"))
 
     # ------------------------------------------------------------------

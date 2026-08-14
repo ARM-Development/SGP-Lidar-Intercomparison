@@ -8,6 +8,8 @@ Lidar profile intercomparison plotting functions
 from __future__ import annotations
 
 import warnings
+from collections import OrderedDict
+from pathlib import Path
 
 import matplotlib.colors as mcolors
 import matplotlib.dates as mdates
@@ -25,8 +27,45 @@ from real_prof_io import load_arm_data
 # ---------------------------------------------------------------------------
 
 def _is_log_var(varname: str) -> bool:
-    """Return True if the variable should be rendered with a log colour scale."""
+    """Return True if the variable should be rendered with a log color scale."""
     return "backscatter" in varname or "extinction" in varname
+
+
+def _extract_instr_field(varname: str) -> tuple[str, str]:
+    """Extract (instrument, field_name) from a DataArray variable name.
+    
+    Removes instrument prefix and optional ``_supp_`` marker.
+    
+    Parameters
+    ----------
+    varname : str
+        Full variable name, e.g., ``"mpl_supp_particulate_backscatter"`` or
+        ``"hsrl_molecular_signal_to_noise"``.
+    
+    Returns
+    -------
+    instrument : str
+        Instrument code (e.g., ``"mpl"``, ``"hsrl"``).
+    field : str
+        Field name with instrument prefix and ``_supp_`` removed
+        (e.g., ``"particulate_backscatter"``).
+    
+    Examples
+    --------
+    >>> _extract_instr_field("mpl_supp_particulate_backscatter")
+    ('mpl', 'particulate_backscatter')
+    >>> _extract_instr_field("hsrl_molecular_signal_to_noise")
+    ('hsrl', 'molecular_signal_to_noise')
+    """
+    # Temporarily remove _supp_ for parsing
+    temp_name = varname.replace("_supp_", "_", 1)
+    
+    # Split on first underscore
+    parts = temp_name.split("_", 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    # Fallback if no underscore found
+    return varname, varname
 
 
 def _safe_norm(
@@ -474,6 +513,273 @@ def compare_variable_to_orig(
         _ax.set_ylim(y_min, y_max)
 
     fig.tight_layout()
+    return fig, axes
+
+
+# ---------------------------------------------------------------------------
+# Multi-instrument comparison plots
+# ---------------------------------------------------------------------------
+
+def plot_profile_curtains(
+    variables: "OrderedDict[str, xr.DataArray]",
+    cmap: str = "viridis",
+    shared_norm: bool = True,
+    ylim: tuple[float, float] | None = None,
+    fig_width: float = 10.0,
+    panel_height: float = 3.0,
+    output_path: "str | Path | None" = None,
+    **kwargs,
+) -> tuple[plt.Figure, np.ndarray]:
+    """Plot curtain panels for multiple instruments from a comparison dict.
+
+    One panel is created per entry in *variables* (HSRL first by convention).
+    Backscatter and extinction variables are rendered with a shared
+    logarithmic color scale; other products use a linear scale.
+
+    Parameters
+    ----------
+    variables : OrderedDict[str, xr.DataArray]
+        ``{legend_label: DataArray}`` as returned by
+        :func:`real_prof_analysis_utils.get_comparison_variables`.
+    cmap : str, optional
+        Colormap name.  Default ``"viridis"``.
+    shared_norm : bool, optional
+        When ``True`` (default), all panels share the same color scale,
+        making inter-instrument differences immediately visible.
+    ylim : tuple of float, optional
+        ``(ymin, ymax)`` range axis limits in km.
+    fig_width : float, optional
+        Figure width in inches.  Default ``10``.
+    panel_height : float, optional
+        Height per panel in inches.  Default ``3``.
+    output_path : str or Path, optional
+        If provided, the figure is saved to this path.
+    **kwargs
+        Forwarded to :func:`matplotlib.pyplot.subplots`.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    axes : np.ndarray of matplotlib.axes.Axes
+    """
+    from collections import OrderedDict as _OD
+
+    labels = list(variables.keys())
+    arrays = list(variables.values())
+    n = len(arrays)
+
+    # Determine whether log scale applies from the first variable name
+    first_name = arrays[0].name or ""
+    log = _is_log_var(first_name)
+
+    # Build a shared normalisation across all panels if requested
+    norm_shared: mcolors.Normalize | None = None
+    if shared_norm:
+        all_data = np.concatenate([da.values.ravel() for da in arrays])
+        norm_shared = _safe_norm(all_data, log, varname=first_name)
+
+    fig, _axes = plt.subplots(
+        n, 1, figsize=(fig_width, panel_height * n), squeeze=False, **kwargs
+    )
+    axes: np.ndarray = _axes.ravel()
+
+    for ax, label, da in zip(axes, labels, arrays):
+        panel_norm = norm_shared if shared_norm else _safe_norm(
+            da.values.ravel(), log, varname=da.name or ""
+        )
+        # Build panel title: INSTRUMENT - field_name (with underscores as spaces)
+        instr, field = _extract_instr_field(da.name or "")
+        title = f"{instr.upper()} - {field.replace('_', ' ')}"
+        mesh = _plot_curtain(ax, da, norm=panel_norm, cmap=cmap, title=title)
+        plt.colorbar(mesh, ax=ax, pad=0.02, label=da.attrs.get("units", ""))
+        if ylim is not None:
+            ax.set_ylim(ylim)
+
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+
+    return fig, axes
+
+
+def plot_time_mean_profiles(
+    variables: "OrderedDict[str, xr.DataArray]",
+    time_slice: "slice | None" = None,
+    mask: "xr.DataArray | None" = None,
+    ax: "plt.Axes | None" = None,
+    ylim: "tuple[float, float] | None" = None,
+    figsize: "tuple[float, float]" = (5.0, 8.0),
+    output_path: "str | Path | None" = None,
+) -> tuple[plt.Figure, plt.Axes]:
+    """Plot time-averaged profiles for multiple instruments on a single axes.
+
+    Each instrument is drawn as a separate line.  Backscatter variables use
+    a logarithmic x-axis; SNR and LDR use a linear x-axis.
+
+    Parameters
+    ----------
+    variables : OrderedDict[str, xr.DataArray]
+        ``{legend_label: DataArray}`` as returned by
+        :func:`real_prof_analysis_utils.get_comparison_variables`.
+    time_slice : slice, optional
+        Restrict the time average to a subset, e.g.
+        ``slice("2026-03-10T20:00", "2026-03-10T21:00")``.
+    mask : xr.DataArray, optional
+        Boolean mask on ``(time, range)``.  Masked-out values are excluded
+        from the mean.  Typically the output of
+        :func:`real_prof_analysis_utils.build_lidar_data_mask`.
+    ax : matplotlib.axes.Axes, optional
+        Axes to draw on.  A new figure is created when ``None`` (default).
+    ylim : tuple of float, optional
+        ``(ymin, ymax)`` range axis limits in km.
+    figsize : tuple of float, optional
+        ``(width, height)`` in inches when creating a new figure.
+        Default ``(5, 8)``.
+    output_path : str or Path, optional
+        If provided, the figure is saved to this path.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax : matplotlib.axes.Axes
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    first_name = next(iter(variables.values())).name or ""
+    log_x = _is_log_var(first_name)
+
+    for label, da in variables.items():
+        # Optionally restrict to a time window
+        if time_slice is not None:
+            da = da.sel(time=time_slice)
+
+        # Ensure (time, range) layout before averaging
+        if list(da.dims) != ["time", "range"]:
+            da = da.transpose("time", "range")
+
+        # Apply mask: replace masked values with NaN before averaging
+        if mask is not None:
+            m = mask.sel(time=da.time) if "time" in mask.dims else mask
+            da = da.where(m)
+
+        # Time-mean: nanmean along the time axis (axis=0 → time)
+        profile = np.nanmean(da.values, axis=0)
+        range_coord = da["range"].values
+
+        ax.plot(profile, range_coord, label=label, linewidth=1.2)
+
+    ax.set_ylabel("Range (km)")
+    ax.set_xlabel(f"{first_name}  [{next(iter(variables.values())).attrs.get('units', '')}]")
+    ax.legend(fontsize=8, loc="upper right")
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    if log_x:
+        ax.set_xscale("log")
+    if ylim is not None:
+        ax.set_ylim(ylim)
+
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+
+    return fig, ax
+
+
+def plot_cfad(
+    cfad_data_dict: "dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]",
+    product: str = "",
+    cmap: str = "Blues",
+    ylim: "tuple[float, float] | None" = None,
+    fig_width: float = 4.5,
+    panel_height: float = 6.0,
+    output_path: "str | Path | None" = None,
+    **kwargs,
+) -> tuple[plt.Figure, np.ndarray]:
+    """Plot Contoured Frequency by Altitude Diagrams (CFADs) for multiple instruments.
+
+    One subplot is created per instrument.  Each panel shows relative
+    frequency as a color fill, with range on the y-axis and value on the
+    x-axis.  Backscatter/extinction products use a logarithmic x-axis.
+
+    Parameters
+    ----------
+    cfad_data_dict : dict[str, (freq_2d, range_centers, value_centers)]
+        Pre-computed CFAD data per label, as returned by
+        :func:`real_prof_analysis_utils.compute_cfad_data`.
+    product : str, optional
+        Product name used solely for the x-axis label.
+    cmap : str, optional
+        Colormap for the 2-D frequency fill.  Default ``"Blues"``.
+    ylim : tuple of float, optional
+        ``(ymin, ymax)`` range axis limits in km.
+    fig_width : float, optional
+        Width of each subplot panel in inches.  Default ``4.5``.
+    panel_height : float, optional
+        Height of each subplot panel in inches.  Default ``6``.
+    output_path : str or Path, optional
+        If provided, the figure is saved to this path.
+    **kwargs
+        Forwarded to :func:`matplotlib.pyplot.subplots`.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    axes : np.ndarray of matplotlib.axes.Axes
+    """
+    labels = list(cfad_data_dict.keys())
+    n = len(labels)
+    log_x = _is_log_var(product)
+
+    fig, _axes = plt.subplots(
+        1, n, figsize=(fig_width * n, panel_height),
+        squeeze=False, sharey=True, **kwargs,
+    )
+    axes: np.ndarray = _axes.ravel()
+
+    for ax, label in zip(axes, labels):
+        freq_2d, range_centers, value_centers = cfad_data_dict[label]
+
+        # pcolormesh expects edges, not centers — compute from center spacing
+        def _edges(centers: np.ndarray) -> np.ndarray:
+            half = np.diff(centers) / 2
+            return np.concatenate([
+                [centers[0] - half[0]],
+                centers[:-1] + half,
+                [centers[-1] + half[-1]],
+            ])
+
+        v_edges = _edges(value_centers)
+        r_edges = _edges(range_centers)
+
+        # Mask zero-frequency cells so they render as white (not color)
+        data = np.ma.masked_where(~np.isfinite(freq_2d) | (freq_2d == 0), freq_2d)
+
+        mesh = ax.pcolormesh(
+            v_edges, r_edges, data,
+            cmap=cmap, vmin=0, shading="flat",
+        )
+        plt.colorbar(mesh, ax=ax, pad=0.02, label="Relative frequency")
+
+        ax.set_title(label, fontsize=9)
+        ax.set_xlabel(product)
+        ax.set_ylabel("Range (km)")
+        ax.grid(True, linestyle="--", alpha=0.3)
+
+        if log_x and value_centers[value_centers > 0].size > 0:
+            ax.set_xscale("log")
+        if ylim is not None:
+            ax.set_ylim(ylim)
+
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+
     return fig, axes
 
 

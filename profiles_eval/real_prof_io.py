@@ -425,6 +425,8 @@ def load_and_process_arm_data(
     range_km: "np.ndarray | None" = None,
     time_step: np.timedelta64 = np.timedelta64(15, "s"),
     data_path_template: str | None = None,
+    deadtime_poly_degree: int = 1,
+    deadtime_n_extrap_samples: int = 3,
 ) -> xr.Dataset:
     """
     Load, optionally correct, and optionally interpolate ARM data.
@@ -483,6 +485,13 @@ def load_and_process_arm_data(
         :func:`find_arm_files`).  When provided, ``data_path`` may be
         ``None`` and the concrete path is derived per-instrument.  This is
         especially convenient when ``instrument_type`` is a list.
+    deadtime_poly_degree : int, optional
+        Polynomial degree for deadtime correction log-log extrapolation above
+        the LUT maximum. Default is 1 (power-law). Set to 0 to clamp to the
+        last LUT factor (nearest-neighbour behaviour).
+    deadtime_n_extrap_samples : int, optional
+        Number of trailing LUT points used to fit the deadtime extrapolation
+        polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
 
     Returns
     -------
@@ -504,6 +513,8 @@ def load_and_process_arm_data(
                     time_min, time_max, safety_delta, config_dir,
                     interpolate, range_km, time_step,
                     data_path_template=data_path_template,
+                    deadtime_poly_degree=deadtime_poly_degree,
+                    deadtime_n_extrap_samples=deadtime_n_extrap_samples,
                 )
             except FileNotFoundError as exc:
                 warnings.warn(f"[{instr}] skipped — {exc}", stacklevel=2)
@@ -652,7 +663,9 @@ def load_and_process_arm_data(
                        else v.get("raw_signal_cross_pol", ""))
 
         ds_corrected = compute_nrb_dataset(
-            ds, instrument_type=instrument_type, config_dir=config_dir
+            ds, instrument_type=instrument_type, config_dir=config_dir,
+            deadtime_poly_degree=deadtime_poly_degree,
+            deadtime_n_extrap_samples=deadtime_n_extrap_samples,
         )
 
         # Propagate source attributes; read from any variable in ds since

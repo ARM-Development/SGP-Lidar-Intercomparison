@@ -21,11 +21,18 @@ def apply_deadtime_correction(
     raw_signal: np.ndarray,
     correction_counts: np.ndarray,
     correction_factors: np.ndarray,
+    poly_degree: int = 1,
+    n_extrap_samples: int = 3,
 ) -> np.ndarray:
     """
     Apply deadtime correction to raw photon-counting lidar signals using
     a precomputed lookup table (LUT).
-    Out-of-range bins are extrapolated using the nearest boundary factor.
+
+    Values within the LUT range are linearly interpolated.  Values above the
+    maximum LUT count rate are extrapolated via a polynomial fit in log-log
+    space fitted to the last ``n_extrap_samples`` LUT points, or clamped
+    if ``poly_degree=0``.  Values below the minimum LUT count rate are
+    clamped to the first LUT factor.
 
     Parameters
     ----------
@@ -41,6 +48,13 @@ def apply_deadtime_correction(
         1D array of shape (n_lut,) containing the multiplicative correction
         factor at each count rate. A value of 1.0 means no correction;
         values > 1.0 indicate the true signal exceeds the measured signal.
+    poly_degree : int, optional
+        Polynomial degree for log-log extrapolation above the LUT maximum.
+        Default is 1 (power-law). Set to 0 to clamp to the last LUT factor.
+
+    n_extrap_samples : int, optional
+        Number of trailing LUT points used to fit the extrapolation polynomial.
+        Ignored when ``poly_degree=0``. Default is 3.
 
     Returns
     -------
@@ -48,13 +62,24 @@ def apply_deadtime_correction(
         2D array of shape (n_profiles, n_range_bins) with deadtime correction
         applied, in counts/us.
     """
-    interp_factors = np.interp(
-        raw_signal.ravel(),
-        correction_counts,
-        correction_factors,
-    ).reshape(raw_signal.shape)
+    if not isinstance(poly_degree, int) or poly_degree < 0:
+        raise ValueError(f"poly_degree must be a non-negative integer, got {poly_degree}")
 
-    return raw_signal * interp_factors
+    flat = raw_signal.ravel()
+    interp_factors = np.interp(flat, correction_counts, correction_factors)
+
+    if poly_degree > 0:
+        upper_mask = flat > correction_counts[-1]
+        if upper_mask.any():
+            n = min(n_extrap_samples, len(correction_counts))
+            log_x_fit = np.log(correction_counts[-n:])
+            log_y_fit = np.log(correction_factors[-n:])
+            coeffs = np.polyfit(log_x_fit, log_y_fit, poly_degree)
+            interp_factors[upper_mask] = np.exp(
+                np.polyval(coeffs, np.log(flat[upper_mask]))
+            )
+
+    return raw_signal * interp_factors.reshape(raw_signal.shape)
 
 
 def apply_afterpulse_correction(
@@ -212,6 +237,8 @@ def compute_nrb(
     overlap_range: np.ndarray,
     overlap_factors: np.ndarray,
     calibration_constant: float = 1.0,
+    deadtime_poly_degree: int = 1,
+    deadtime_n_extrap_samples: int = 3,
 ) -> np.ndarray:
     """
     Compute the Normalized Relative Backscatter (NRB) from raw lidar data.
@@ -263,6 +290,13 @@ def compute_nrb(
     calibration_constant : float, optional
         Instrument calibration constant C. Use 1.0 for relative NRB.
         Default is 1.0.
+    deadtime_poly_degree : int, optional
+        Polynomial degree for deadtime correction log-log extrapolation above
+        the LUT maximum. Default is 1 (power-law). Set to 0 to clamp to the
+        last LUT factor (nearest-neighbour behaviour).
+    deadtime_n_extrap_samples : int, optional
+        Number of trailing LUT points used to fit the deadtime extrapolation
+        polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
 
     Returns
     -------
@@ -275,6 +309,8 @@ def compute_nrb(
         raw_signal,
         deadtime_correction_counts,
         deadtime_correction_factors,
+        poly_degree=deadtime_poly_degree,
+        n_extrap_samples=deadtime_n_extrap_samples,
     )
 
     # Step 2 — afterpulse correction
@@ -313,6 +349,8 @@ def compute_nrb_dataset(
     calibration_constant: float = 1.0,
     cross_pol: bool = True,
     config_dir: str = "./configs",
+    deadtime_poly_degree: int = 1,
+    deadtime_n_extrap_samples: int = 3,
 ) -> "xr.Dataset":
     """
     Compute co-pol NRB and, optionally, cross-pol NRB and linear depolarization
@@ -353,6 +391,13 @@ def compute_nrb_dataset(
     config_dir : str, optional
         Directory containing the JSON configuration files. Only used when
         ``instrument_type`` is provided. Default is ``"./configs"``.
+    deadtime_poly_degree : int, optional
+        Polynomial degree for deadtime correction log-log extrapolation above
+        the LUT maximum. Default is 1 (power-law). Set to 0 to clamp to the
+        last LUT factor (nearest-neighbour behaviour).
+    deadtime_n_extrap_samples : int, optional
+        Number of trailing LUT points used to fit the deadtime extrapolation
+        polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
 
     Returns
     -------
@@ -387,7 +432,18 @@ def compute_nrb_dataset(
 
     # Extract all arrays from the dataset upfront
     range_km         = ds[_name(v["range"])].values
-    raw_co           = ds[_name(v["raw_signal_co_pol"])].values
+    
+    # Extract raw co-pol signal and ensure (time, range_or_spatial_dim) layout
+    raw_co_da = ds[_name(v["raw_signal_co_pol"])]
+    # Find the spatial dimension name (could be 'range', 'range_bins', 'height', etc.)
+    dims_list = list(raw_co_da.dims)
+    time_dim = next((d for d in dims_list if d == "time"), None)
+    spatial_dim = next((d for d in dims_list if d != "time"), None)
+    
+    if time_dim and spatial_dim and [time_dim, spatial_dim] != dims_list:
+        raw_co_da = raw_co_da.transpose(time_dim, spatial_dim)
+    raw_co = raw_co_da.values
+    
     background_co    = ds[_name(v["background_co_pol"])].values
     dt_counts        = ds[c["deadtime_counts"]].values
     dt_factors       = ds[c["deadtime_factors"]].values
@@ -411,9 +467,11 @@ def compute_nrb_dataset(
         overlap_range               = overlap_range,
         overlap_factors             = overlap_factors,
         calibration_constant        = calibration_constant,
+        deadtime_poly_degree        = deadtime_poly_degree,
+        deadtime_n_extrap_samples   = deadtime_n_extrap_samples,
     )
 
-    dims = ("time", "range_bins")
+    dims = ("time", "range")
     data_vars = {
         _name(v["attenuated_backscatter"]): (
             dims, nrb_co,
@@ -422,7 +480,16 @@ def compute_nrb_dataset(
     }
 
     if cross_pol:
-        raw_cross        = ds[_name(v["raw_signal_cross_pol"])].values
+        # Extract raw cross-pol signal and ensure (time, range_or_spatial_dim) layout
+        raw_cross_da = ds[_name(v["raw_signal_cross_pol"])]
+        dims_list = list(raw_cross_da.dims)
+        time_dim = next((d for d in dims_list if d == "time"), None)
+        spatial_dim = next((d for d in dims_list if d != "time"), None)
+        
+        if time_dim and spatial_dim and [time_dim, spatial_dim] != dims_list:
+            raw_cross_da = raw_cross_da.transpose(time_dim, spatial_dim)
+        raw_cross = raw_cross_da.values
+        
         background_cross = ds[_name(v["background_cross_pol"])].values
         ap_profile_cross = ds[c["afterpulse_profile_cross_pol"]].values
         dc_profile_cross = ds[c["darkcounts_profile_cross_pol"]].values
@@ -440,6 +507,8 @@ def compute_nrb_dataset(
             overlap_range               = overlap_range,
             overlap_factors             = overlap_factors,
             calibration_constant        = calibration_constant,
+            deadtime_poly_degree        = deadtime_poly_degree,
+            deadtime_n_extrap_samples   = deadtime_n_extrap_samples,
         )
         ldr = nrb_cross / (nrb_co + nrb_cross)
         data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (
@@ -455,8 +524,8 @@ def compute_nrb_dataset(
     return xr.Dataset(
         data_vars,
         coords={
-            "time":       ds[_name(v["time"])],
-            "range_bins": range_km,
+            "time":  ds[_name(v["time"])],
+            "range": range_km,
         },
     )
 
@@ -472,23 +541,27 @@ if __name__ == "__main__":
     # Load data and compute NRB dataset
     # ------------------------------------------------------------------
     FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20260214.000009.nc"
+    FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20260612.000004.nc"  # test case for Donna
+    FILE = "/data/archive/kcg/kcgmplpolfsM1.b1/kcgmplpolfsM1.b1.20240601.000009.nc"
+    FILE = "/data/archive/kcg/kcgminimplS1.b1/kcgminimplS1.b1.20240601.000000.nc"  # test case from Damao
     ds     = xr.open_dataset(FILE)
-    result = compute_nrb_dataset(ds, instrument_type="minimpl", config_dir="./configs")
+    result = compute_nrb_dataset(ds, instrument_type="minimpl", config_dir="./configs",
+                                 deadtime_poly_degree=1, deadtime_n_extrap_samples=3)
 
     has_cross    = "ldr" in result
-    max_range_km = 10.0                         # maximum y-axis range (km)
+    max_range_km = 5.0                         # maximum y-axis range (km)
 
     # Build plot dataset — keep only up to max_range_km
-    range_sel = result.range_bins <= max_range_km
-    plot_ds = result.sel(range_bins=range_sel)
+    range_sel = result.range <= max_range_km
+    plot_ds = result.sel(range=range_sel)
 
     # Add log10-transformed fields (raw signal and NRB co); LDR stays linear
     range_mask = ds["range"].values <= max_range_km
     raw_vals   = ds["signal_return_co_pol"].values[:, range_mask]
     plot_ds["raw"] = xr.DataArray(
         np.log10(np.where(raw_vals > 0, raw_vals, np.nan)),
-        dims=["time", "range_bins"],
-        coords={"time": plot_ds.time, "range_bins": plot_ds.range_bins},
+        dims=["time", "range"],
+        coords={"time": plot_ds.time, "range": plot_ds.range},
     )
     plot_ds["log_nrb_co"] = np.log10(plot_ds["nrb_co"].where(plot_ds["nrb_co"] > 0))
 
@@ -513,12 +586,16 @@ if __name__ == "__main__":
         vmax = fixed_vmax if fixed_vmax is not None else float(da.quantile(0.99))
 
         da.plot.pcolormesh(
-            ax=ax_c, x="time", y="range_bins",
+            ax=ax_c, x="time", y="range",
             cmap=cmap, vmin=vmin, vmax=vmax,
+            #cmap=cmap, vmin=0.0, vmax=0.08,
             cbar_kwargs={"label": cb_label},
         )
         ax_c.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-        ax_c.set_ylim(float(plot_ds.range_bins[0]), max_range_km)
+        t_base = plot_ds.time.values[0].astype('datetime64[D]')
+        #ax_c.set_xlim(t_base + np.timedelta64(14, 'h'), t_base + np.timedelta64(17, 'h'))
+        ax_c.set_ylim(float(plot_ds.range[0]), max_range_km)
+        #ax_c.set_ylim((0.5, 1.5))
         ax_c.set_title(f"{title} Curtain")
         ax_c.set_xlabel("Time (UTC)")
         ax_c.set_ylabel("Range (km)")

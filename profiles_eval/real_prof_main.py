@@ -47,6 +47,7 @@ ALL_INSTRUMENTS = [
     "dlwindstat",
     "dlwind",
     "interpolatedsonde",
+    "pblhtbeml",
 ]
 
 # ---------------------------------------------------------------------------
@@ -226,6 +227,12 @@ if __name__ == "__main__":
         default=None,
         help=f"Data path template (default: {DATA_PATH_TEMPLATE})",
     )
+    parser.add_argument(
+        "--output-path",
+        type=str,
+        default="./",
+        help="Output directory for exported files (default: ./)",
+    )
     args = parser.parse_args()
     
     # Parse period_start and period_end from CLI or use defaults
@@ -260,6 +267,11 @@ if __name__ == "__main__":
             # Use resolved site and facility values
             resolved_site = args.site if args.site else SITE
             resolved_facility = args.facility if args.facility else FACILITY
-            out = export_dataset(result, site=resolved_site, facility=resolved_facility)
+            out = export_dataset(
+                result,
+                site=resolved_site,
+                facility=resolved_facility,
+                output_path=args.output_path,
+            )
             print(f"\nExported: {out}")
         t = t_next

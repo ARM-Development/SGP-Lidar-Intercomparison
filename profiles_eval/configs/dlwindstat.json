@@ -15,6 +15,10 @@
       "name_in_file": "height",
       "units": "m"
     },
+    "w_variance": {
+      "name_in_file": "w_variance",
+      "units": "m^2/s^2"
+    },
     "cloud_base": {
       "name_in_file": "dl_cbh",
       "units": "m"
