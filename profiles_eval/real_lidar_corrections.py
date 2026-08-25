@@ -540,10 +540,11 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Load data and compute NRB dataset
     # ------------------------------------------------------------------
-    FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20260214.000009.nc"
-    FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20260612.000004.nc"  # test case for Donna
-    FILE = "/data/archive/kcg/kcgmplpolfsM1.b1/kcgmplpolfsM1.b1.20240601.000009.nc"
-    FILE = "/data/archive/kcg/kcgminimplS1.b1/kcgminimplS1.b1.20240601.000000.nc"  # test case from Damao
+    #FILE = "/data/archive/sgp/sgpmplpolfsC1.b1/sgpmplpolfsC1.b1.20251129.000006.nc"  # [MPL] SGP test case #2
+    #FILE = "/data/archive/kcg/kcgmplpolfsM1.b1/kcgmplpolfsM1.b1.20240601.000009.nc"  # [MPL] KCG test case #3
+    #FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20260612.000004.nc"  # [mini-MPL] SGP test case #1
+    #FILE = "/data/archive/sgp/sgpminimplC1.b1/sgpminimplC1.b1.20251129.000000.nc"  # [mini-MPL] SGP test case #2
+    #FILE = "/data/archive/kcg/kcgminimplS1.b1/kcgminimplS1.b1.20240601.000000.nc"  # [mini-MPL] KCG test case #3
     ds     = xr.open_dataset(FILE)
     result = compute_nrb_dataset(ds, instrument_type="minimpl", config_dir="./configs",
                                  deadtime_poly_degree=1, deadtime_n_extrap_samples=3)
@@ -588,14 +589,14 @@ if __name__ == "__main__":
         da.plot.pcolormesh(
             ax=ax_c, x="time", y="range",
             cmap=cmap, vmin=vmin, vmax=vmax,
-            #cmap=cmap, vmin=0.0, vmax=0.08,
+            #cmap=cmap, vmin=0.0, vmax=0.2,
             cbar_kwargs={"label": cb_label},
         )
         ax_c.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
         t_base = plot_ds.time.values[0].astype('datetime64[D]')
         #ax_c.set_xlim(t_base + np.timedelta64(14, 'h'), t_base + np.timedelta64(17, 'h'))
         ax_c.set_ylim(float(plot_ds.range[0]), max_range_km)
-        #ax_c.set_ylim((0.5, 1.5))
+        #ax_c.set_ylim((0.0, 2.0))
         ax_c.set_title(f"{title} Curtain")
         ax_c.set_xlabel("Time (UTC)")
         ax_c.set_ylabel("Range (km)")

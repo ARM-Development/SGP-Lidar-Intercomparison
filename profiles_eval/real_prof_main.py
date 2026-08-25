@@ -31,6 +31,8 @@ CONFIG_DIR = str(Path(__file__).parent / "configs")
 
 TIME_MIN = np.datetime64("2026-03-10T20:00:00", "ns")
 TIME_MAX = np.datetime64("2026-03-10T21:00:00", "ns")
+#TIME_MIN = np.datetime64("2025-11-29T11:00:00", "ns")
+#TIME_MAX = np.datetime64("2025-11-29T13:00:00", "ns")
 
 # ARM nested archive: /data/archive/{site}/{site}{instrument_class}{facility}.{level}/
 DATA_PATH_TEMPLATE = "/data/archive/{site}/{site}{instrument_class}{facility}.{level}"

@@ -523,7 +523,7 @@ def compare_variable_to_orig(
 def plot_profile_curtains(
     variables: "OrderedDict[str, xr.DataArray]",
     cmap: str = "viridis",
-    shared_norm: bool = True,
+    shared_norm: bool = False,
     ylim: tuple[float, float] | None = None,
     fig_width: float = 10.0,
     panel_height: float = 3.0,
@@ -544,8 +544,12 @@ def plot_profile_curtains(
     cmap : str, optional
         Colormap name.  Default ``"viridis"``.
     shared_norm : bool, optional
-        When ``True`` (default), all panels share the same color scale,
-        making inter-instrument differences immediately visible.
+        When ``True``, all panels share the same color scale, making
+        inter-instrument differences immediately visible.  Default is
+        ``False`` so that each instrument is auto-scaled independently —
+        this avoids instruments with different physical units (e.g. raw
+        NRB counts/µs·km² vs. calibrated backscatter m⁻¹sr⁻¹) being
+        rendered on the same colour range.
     ylim : tuple of float, optional
         ``(ymin, ymax)`` range axis limits in km.
     fig_width : float, optional

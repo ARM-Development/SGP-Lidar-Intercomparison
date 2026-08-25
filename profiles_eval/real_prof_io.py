@@ -586,22 +586,26 @@ def load_and_process_arm_data(
         data_path_template=data_path_template,
     )
 
-    # Derive range units from the field attribute so that new
-    # instruments are handled correctly without touching the config.
-    range_nif = key_to_nif.get("range", "range")
-    _range_da = ds.get(range_nif, ds.coords.get(range_nif))
+    # Derive range units from the config, treated as the source of truth
+    # for the units of the range coordinate values. This ensures correct
+    # handling regardless of whether NetCDF file attributes are missing.
+    range_cfg_entry = _cfg_vars.get("range", {})
     range_units = (
-        _range_da.attrs.get("units", "m") if _range_da is not None else "m"
+        range_cfg_entry.get("units", "m")
+        if isinstance(range_cfg_entry, dict)
+        else "m"
     )
+
+    # Get the actual field name for range in the loaded dataset
+    range_nif = key_to_nif.get("range", "range")
 
     # ------------------------------------------------------------------
     # Capture native resolutions from primary dataset
     # ------------------------------------------------------------------
     native_time_res = _native_time_res_str(ds.time.values)
-    range_coord = ds.get(range_nif, ds.coords.get(range_nif))
     native_range_res = (
-        _native_range_res_str(range_coord, range_units)
-        if range_coord is not None else "unknown"
+        _native_range_res_str(ds["range"], range_units)
+        if "range" in ds.coords else "unknown"
     )
 
     # ------------------------------------------------------------------
@@ -693,7 +697,8 @@ def load_and_process_arm_data(
             if isinstance(v.get("background_cross_pol"), dict)
             else v.get("background_cross_pol", ""),
         ] + correction_field_names
-        drop = [f for f in raw_fields_to_drop if f and f in ds_corrected]
+        # Only drop data_vars, not coordinates (e.g., 'range' used in both data and corrections)
+        drop = [f for f in raw_fields_to_drop if f and f in ds_corrected.data_vars]
         ds = ds_corrected.drop_vars(drop, errors="ignore")
 
     # ------------------------------------------------------------------
