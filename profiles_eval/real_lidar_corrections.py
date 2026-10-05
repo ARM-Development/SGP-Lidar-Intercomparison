@@ -9,6 +9,7 @@ Includes:
 - Background subtraction using a per-profile background time series
 - Range-squared correction
 - Overlap correction via range LUT
+- Laser energy normalization using the per-profile energy monitor
 ===============================================================
 """
 import numpy as np
@@ -224,6 +225,41 @@ def apply_overlap_correction(
     return signal / overlap_safe   # broadcasts (n_profiles, n_bins) / (n_bins,)
 
 
+def apply_energy_normalization(
+    signal: np.ndarray,
+    energy: np.ndarray,
+    energy_reference: float = 1.0,
+) -> np.ndarray:
+    """
+    Normalize each profile by the laser pulse energy.
+
+    ``signal * energy_reference / energy``.  With ``energy_reference=1.0``
+    the result is in counts/us (per uJ) and matches the convention of the
+    cmask product.  The energy monitor is notabsolutely calibrated and is
+    meant for relative normalization only.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        2D array (n_profiles, n_range_bins).
+    energy : np.ndarray
+        1D array (n_profiles,) of energy monitor values (uJ).  Non-finite
+        or non-positive values (e.g. -9999 fill) yield NaN profiles.
+    energy_reference : float, optional
+        Reference energy the signal is scaled to. Default 1.0.
+
+    Returns
+    -------
+    np.ndarray
+        Energy-normalized signal, same shape as ``signal``.
+    """
+    energy = np.asarray(energy, dtype=float)
+    valid = np.isfinite(energy) & (energy > 0)
+    scale = np.full(energy.shape, np.nan)
+    scale[valid] = energy_reference / energy[valid]
+    return signal * scale[:, None]
+
+
 def compute_nrb(
     raw_signal: np.ndarray,
     range_km: np.ndarray,
@@ -239,6 +275,8 @@ def compute_nrb(
     calibration_constant: float = 1.0,
     deadtime_poly_degree: int = 1,
     deadtime_n_extrap_samples: int = 3,
+    energy: np.ndarray = None,
+    energy_reference: float = 1.0,
 ) -> np.ndarray:
     """
     Compute the Normalized Relative Backscatter (NRB) from raw lidar data.
@@ -253,7 +291,9 @@ def compute_nrb(
     4. **Range-squared correction** -- compensates geometric signal decay.
     5. **Overlap correction** -- corrects near-field beam/FOV mismatch via a
        range LUT.
-    6. **Calibration scaling** -- divides by the instrument calibration constant.
+    6. **Energy normalization** (optional, when ``energy`` is given) --
+       divides each profile by its laser pulse energy.
+    7. **Calibration scaling** -- divides by the instrument calibration constant.
 
     Parameters
     ----------
@@ -297,6 +337,11 @@ def compute_nrb(
     deadtime_n_extrap_samples : int, optional
         Number of trailing LUT points used to fit the deadtime extrapolation
         polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
+    energy : np.ndarray, optional
+        1D array (n_profiles,) of laser energy monitor values (uJ). If None,
+        no energy normalization is applied.
+    energy_reference : float, optional
+        Reference energy for normalization. Default 1.0 (plain division).
 
     Returns
     -------
@@ -337,7 +382,12 @@ def compute_nrb(
         range_km,
     )
 
-    # Step 6 — calibration scaling
+    # Step 6 — energy normalization (linear, so its position after the
+    # nonlinear deadtime/afterpulse steps is what matters)
+    if energy is not None:
+        signal = apply_energy_normalization(signal, energy, energy_reference)
+
+    # Step 7 — calibration scaling
     return signal / calibration_constant
 
 def compute_nrb_dataset(
@@ -351,6 +401,7 @@ def compute_nrb_dataset(
     config_dir: str = "./configs",
     deadtime_poly_degree: int = 1,
     deadtime_n_extrap_samples: int = 3,
+    energy_reference: float = 1.0,
 ) -> "xr.Dataset":
     """
     Compute co-pol NRB and, optionally, cross-pol NRB and linear depolarization
@@ -398,6 +449,10 @@ def compute_nrb_dataset(
     deadtime_n_extrap_samples : int, optional
         Number of trailing LUT points used to fit the deadtime extrapolation
         polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
+    energy_reference : float, optional
+        Reference energy for normalization. Used only when the config defines
+        an ``energy_monitor`` variable. Default 1.0 (divide by the monitor
+        value, as in the legacy cmask product).
 
     Returns
     -------
@@ -454,6 +509,11 @@ def compute_nrb_dataset(
     overlap_range    = ds[c["overlap_range"]].values
     overlap_factors  = ds[c["overlap_factors"]].values
 
+    # Optional energy normalization (only if configured and present in file)
+    energy = None
+    if "energy_monitor" in v and _name(v["energy_monitor"]) in ds:
+        energy = ds[_name(v["energy_monitor"])].values.astype(float)
+
     nrb_co = compute_nrb(
         raw_signal                  = raw_co,
         range_km                    = range_km,
@@ -469,6 +529,8 @@ def compute_nrb_dataset(
         calibration_constant        = calibration_constant,
         deadtime_poly_degree        = deadtime_poly_degree,
         deadtime_n_extrap_samples   = deadtime_n_extrap_samples,
+        energy                      = energy,
+        energy_reference            = energy_reference,
     )
 
     dims = ("time", "range")
@@ -509,6 +571,8 @@ def compute_nrb_dataset(
             calibration_constant        = calibration_constant,
             deadtime_poly_degree        = deadtime_poly_degree,
             deadtime_n_extrap_samples   = deadtime_n_extrap_samples,
+            energy                      = energy,
+            energy_reference            = energy_reference,
         )
         ldr = nrb_cross / (nrb_co + nrb_cross)
         data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (

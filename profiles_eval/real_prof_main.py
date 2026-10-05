@@ -110,7 +110,7 @@ def main(
         # ------------------------------------------------------------------
         # Load supplementary facility data if configured
         # ------------------------------------------------------------------
-        supp_facilities = get_supplementary_facilities(SITE, FACILITY, CONFIG_DIR)
+        supp_facilities = get_supplementary_facilities(site, facility, CONFIG_DIR)
         contributing_supp_facilities = []
 
         for supp_facility in supp_facilities:

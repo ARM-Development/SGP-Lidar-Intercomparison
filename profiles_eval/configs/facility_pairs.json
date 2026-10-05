@@ -3,5 +3,10 @@
     "C1": {
       "supplementary_facilities": ["E13"]
     }
+  },
+  "kcg": {
+    "M1": {
+      "supplementary_facilities": ["S1"]
+    }
   }
 }

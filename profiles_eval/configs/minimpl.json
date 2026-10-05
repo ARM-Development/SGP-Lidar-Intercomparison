@@ -31,6 +31,10 @@
       "name_in_file": "background_signal_cross_pol",
       "units": "counts/us"
     },
+    "energy_monitor": {
+      "name_in_file": "energy_monitor",
+      "units": "uJ"
+    },
     "attenuated_backscatter": {
       "name_in_file": "nrb_co",
       "units": "counts/us km^2"
