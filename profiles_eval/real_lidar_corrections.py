@@ -574,7 +574,7 @@ def compute_nrb_dataset(
             energy                      = energy,
             energy_reference            = energy_reference,
         )
-        ldr = nrb_cross / (nrb_co + nrb_cross)
+        ldr = nrb_cross / nrb_co
         data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (
             dims, nrb_cross,
             {"units": _units(v["attenuated_backscatter_cross_pol"]), "long_name": "NRB cross-pol"},
