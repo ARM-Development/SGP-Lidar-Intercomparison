@@ -402,6 +402,7 @@ def compute_nrb_dataset(
     deadtime_poly_degree: int = 1,
     deadtime_n_extrap_samples: int = 3,
     energy_reference: float = 1.0,
+    total_nrb: bool = True,
 ) -> "xr.Dataset":
     """
     Compute co-pol NRB and, optionally, cross-pol NRB and linear depolarization
@@ -418,7 +419,7 @@ def compute_nrb_dataset(
 
     The LDR is defined as:
 
-        LDR = NRB_cross / (NRB_co + NRB_cross)
+        LDR = NRB_cross / NRB_co
 
     Parameters
     ----------
@@ -453,12 +454,19 @@ def compute_nrb_dataset(
         Reference energy for normalization. Used only when the config defines
         an ``energy_monitor`` variable. Default 1.0 (divide by the monitor
         value, as in the legacy cmask product).
+    total_nrb : bool, optional
+        Only used when ``cross_pol=True``. If True (default), the total NRB
+        (``nrb_co + nrb_cross``) is reported under the config's
+        ``attenuated_backscatter`` name, and the separate co-pol and
+        cross-pol NRB are not reported. If False, co-pol and cross-pol NRB
+        are reported separately. The LDR is reported in both cases.
 
     Returns
     -------
     xr.Dataset
-        Dataset with variable ``nrb_co`` and, when ``cross_pol=True``,
-        also ``nrb_cross`` and ``ldr``.
+        With ``cross_pol=False``: ``nrb_co`` only. With ``cross_pol=True``:
+        ``ldr`` plus either the total NRB (``total_nrb=True``, stored under
+        the ``attenuated_backscatter`` name) or ``nrb_co`` and ``nrb_cross``.
     """
     # Resolve field-name mappings
     if instrument_type is not None and (variables is not None or corrections is not None):
@@ -574,11 +582,19 @@ def compute_nrb_dataset(
             energy                      = energy,
             energy_reference            = energy_reference,
         )
-        ldr = nrb_cross / (nrb_co + nrb_cross)
-        data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (
-            dims, nrb_cross,
-            {"units": _units(v["attenuated_backscatter_cross_pol"]), "long_name": "NRB cross-pol"},
-        )
+        ldr = nrb_cross / nrb_co
+        if total_nrb:
+            # NaN in either channel propagates to the total
+            data_vars[_name(v["attenuated_backscatter"])] = (
+                dims, nrb_co + nrb_cross,
+                {"units": _units(v["attenuated_backscatter"]),
+                 "long_name": "NRB total (co-pol + cross-pol)"},
+            )
+        else:
+            data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (
+                dims, nrb_cross,
+                {"units": _units(v["attenuated_backscatter_cross_pol"]), "long_name": "NRB cross-pol"},
+            )
         data_vars[_name(v["linear_depol_ratio"])] = (
             dims, ldr,
             {"units": _units(v["linear_depol_ratio"]),
@@ -634,7 +650,7 @@ if __name__ == "__main__":
     # None means derive vmin/vmax from 5th/95th percentile
     rows = [
         ("raw",        "log₁₀ counts/µs",       "jet",   "steelblue",  "Raw Signal",   None, None),
-        ("log_nrb_co", "log₁₀ counts/µs · km²", "jet",   "darkorange", "NRB (co-pol)", None, None),
+        ("log_nrb_co", "log₁₀ counts/µs · km²", "jet",   "darkorange", "NRB (total)", None, None),
     ]
     if has_cross:
         rows.append(("ldr", "LDR", "jet", "firebrick", "LDR", 0.0, 0.6))

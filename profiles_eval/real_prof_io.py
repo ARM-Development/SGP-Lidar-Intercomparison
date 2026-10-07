@@ -427,6 +427,7 @@ def load_and_process_arm_data(
     data_path_template: str | None = None,
     deadtime_poly_degree: int = 1,
     deadtime_n_extrap_samples: int = 3,
+    total_nrb: bool = True,
 ) -> xr.Dataset:
     """
     Load, optionally correct, and optionally interpolate ARM data.
@@ -492,6 +493,10 @@ def load_and_process_arm_data(
     deadtime_n_extrap_samples : int, optional
         Number of trailing LUT points used to fit the deadtime extrapolation
         polynomial. Ignored when ``deadtime_poly_degree=0``. Default is 3.
+    total_nrb : bool, optional
+        For lidars with cross-pol NRB corrections: if True (default), report
+        only the total NRB (co + cross) and the LDR; if False, report co-pol
+        and cross-pol NRB separately (plus LDR).
 
     Returns
     -------
@@ -515,6 +520,7 @@ def load_and_process_arm_data(
                     data_path_template=data_path_template,
                     deadtime_poly_degree=deadtime_poly_degree,
                     deadtime_n_extrap_samples=deadtime_n_extrap_samples,
+                    total_nrb=total_nrb,
                 )
             except FileNotFoundError as exc:
                 warnings.warn(f"[{instr}] skipped — {exc}", stacklevel=2)
@@ -670,6 +676,7 @@ def load_and_process_arm_data(
             ds, instrument_type=instrument_type, config_dir=config_dir,
             deadtime_poly_degree=deadtime_poly_degree,
             deadtime_n_extrap_samples=deadtime_n_extrap_samples,
+            total_nrb=total_nrb,
         )
 
         # Propagate source attributes; read from any variable in ds since
@@ -678,7 +685,7 @@ def load_and_process_arm_data(
         src_ds = ds[_ref_var].attrs.get("source_datastream", "") if _ref_var else ""
         src_pv = ds[_ref_var].attrs.get("source_process_version", "") if _ref_var else ""
         for nif, raw_fields in [
-            (nrb_co_nif,  raw_co_nif),
+            (nrb_co_nif,  f"{raw_co_nif},{raw_x_nif}" if total_nrb and raw_x_nif else raw_co_nif),
             (nrb_x_nif,   raw_x_nif),
             (ldr_nif,     f"{raw_co_nif},{raw_x_nif}"),
         ]:
