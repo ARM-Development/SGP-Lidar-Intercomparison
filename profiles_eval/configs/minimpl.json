@@ -12,7 +12,7 @@
       "units": "sec"
     },
     "range": {
-      "name_in_file": "range",
+      "name_in_file": "range_bins",
       "units": "km"
     },
     "raw_signal_co_pol": {
@@ -50,15 +50,15 @@
   },
   "coordinates": {
     "time": "time",
-    "range": "range"
+    "range": "range_bins"
   },
   "corrections": {
     "deadtime_counts":             "deadtime_correction_counts",
     "deadtime_factors":            "deadtime_correction",
-    "afterpulse_range":            "range",
+    "afterpulse_range":            "range_bins",
     "afterpulse_profile_co_pol":   "afterpulse_correction_co_pol",
     "afterpulse_profile_cross_pol":"afterpulse_correction_cross_pol",
-    "darkcounts_range":            "range",
+    "darkcounts_range":            "range_bins",
     "darkcounts_profile_co_pol":   "darkcount_correction_co_pol",
     "darkcounts_profile_cross_pol":"darkcount_correction_cross_pol",
     "overlap_range":               "overlap_correction_heights",

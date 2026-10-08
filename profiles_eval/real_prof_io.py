@@ -617,8 +617,8 @@ def load_and_process_arm_data(
     # ------------------------------------------------------------------
     native_time_res = _native_time_res_str(ds.time.values)
     native_range_res = (
-        _native_range_res_str(ds["range"], range_units)
-        if "range" in ds.variables else "unknown"
+        _native_range_res_str(ds[range_nif], range_units)
+        if range_nif in ds.variables else "unknown"
     )
 
     # ------------------------------------------------------------------
