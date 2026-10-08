@@ -422,7 +422,7 @@ def compute_nrb_dataset(
 
     - fully linear pulses (``fully_linear_pulses=True``):
       LDR = NRB_cross / NRB_co,  total = NRB_co + NRB_cross
-    - hybrid, linear co-pol / circular cross-pol (default, as for the MPL
+    - hybrid, linear cross-pol / circular co-pol (default, as for the MPL
       and mini-MPL):
       LDR = NRB_cross / (NRB_co + NRB_cross),  total = NRB_co + 2 * NRB_cross
 
@@ -467,8 +467,8 @@ def compute_nrb_dataset(
         are reported separately. The LDR is reported in both cases.
     fully_linear_pulses : bool, optional
         True if the lidar transmits fully linearly polarized pulses; False
-        (default) if it uses the hybrid approach (linear co-pol, circular
-        as cross-pol). Selects the LDR and total NRB formulas (see above).
+        (default) if it uses the hybrid approach (linear and circular).
+        Selects the LDR and total NRB formulas (see above).
 
     Returns
     -------

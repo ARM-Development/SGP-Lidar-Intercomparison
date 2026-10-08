@@ -500,8 +500,8 @@ def load_and_process_arm_data(
         and cross-pol NRB separately (plus LDR).
     fully_linear_pulses : bool, optional
         True for fully linearly polarized transmitted pulses; False
-        (default) for the hybrid approach (linear co-pol, circular
-        as cross-pol) used by the MPL and mini-MPL.  Selects the LDR and total
+        (default) for the hybrid approach (linear and circular)
+        used by the MPL and mini-MPL.  Selects the LDR and total
         NRB formulas in :func:`compute_nrb_dataset`.
 
     Returns
