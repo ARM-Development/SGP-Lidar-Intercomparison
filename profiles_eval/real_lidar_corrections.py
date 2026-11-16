@@ -403,6 +403,7 @@ def compute_nrb_dataset(
     deadtime_n_extrap_samples: int = 3,
     energy_reference: float = 1.0,
     total_nrb: bool = True,
+    fully_linear_pulses: bool = False,
 ) -> "xr.Dataset":
     """
     Compute co-pol NRB and, optionally, cross-pol NRB and linear depolarization
@@ -417,9 +418,13 @@ def compute_nrb_dataset(
     2. **Manual dicts**: pass ``variables`` and ``corrections`` directly,
        using the same key structure as the JSON file.
 
-    The LDR is defined as:
+    The LDR and total NRB depend on the transmitted polarization:
 
-        LDR = NRB_cross / NRB_co
+    - fully linear pulses (``fully_linear_pulses=True``):
+      LDR = NRB_cross / NRB_co,  total = NRB_co + NRB_cross
+    - hybrid, linear cross-pol / circular co-pol (default, as for the MPL
+      and mini-MPL):
+      LDR = NRB_cross / (NRB_co + NRB_cross),  total = NRB_co + 2 * NRB_cross
 
     Parameters
     ----------
@@ -460,6 +465,10 @@ def compute_nrb_dataset(
         ``attenuated_backscatter`` name, and the separate co-pol and
         cross-pol NRB are not reported. If False, co-pol and cross-pol NRB
         are reported separately. The LDR is reported in both cases.
+    fully_linear_pulses : bool, optional
+        True if the lidar transmits fully linearly polarized pulses; False
+        (default) if it uses the hybrid approach (linear and circular).
+        Selects the LDR and total NRB formulas (see above).
 
     Returns
     -------
@@ -582,13 +591,23 @@ def compute_nrb_dataset(
             energy                      = energy,
             energy_reference            = energy_reference,
         )
-        ldr = nrb_cross / nrb_co
+        if fully_linear_pulses:
+            ldr = nrb_cross / nrb_co
+            nrb_tot = nrb_co + nrb_cross
+            tot_comment = "Calculated as NRB_co + NRB_cross"
+            ldr_comment = "Calculated as NRB_cross / NRB_co"
+        else:
+            ldr = nrb_cross / (nrb_co + nrb_cross)
+            nrb_tot = nrb_co + 2.0 * nrb_cross
+            tot_comment = "Calculated as NRB_co + 2 * NRB_cross"
+            ldr_comment = "Calculated as NRB_cross / (NRB_co + NRB_cross)"
         if total_nrb:
             # NaN in either channel propagates to the total
             data_vars[_name(v["attenuated_backscatter"])] = (
-                dims, nrb_co + nrb_cross,
+                dims, nrb_tot,
                 {"units": _units(v["attenuated_backscatter"]),
-                 "long_name": "NRB total (co-pol + cross-pol)"},
+                 "long_name": "NRB total",
+                 "comment": tot_comment},
             )
         else:
             data_vars[_name(v["attenuated_backscatter_cross_pol"])] = (
@@ -598,7 +617,8 @@ def compute_nrb_dataset(
         data_vars[_name(v["linear_depol_ratio"])] = (
             dims, ldr,
             {"units": _units(v["linear_depol_ratio"]),
-             "long_name": "Linear depolarization ratio"},
+             "long_name": "Linear depolarization ratio",
+             "comment": ldr_comment},
         )
 
     return xr.Dataset(

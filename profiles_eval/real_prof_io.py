@@ -428,6 +428,7 @@ def load_and_process_arm_data(
     deadtime_poly_degree: int = 1,
     deadtime_n_extrap_samples: int = 3,
     total_nrb: bool = True,
+    fully_linear_pulses: bool = False,
 ) -> xr.Dataset:
     """
     Load, optionally correct, and optionally interpolate ARM data.
@@ -497,6 +498,11 @@ def load_and_process_arm_data(
         For lidars with cross-pol NRB corrections: if True (default), report
         only the total NRB (co + cross) and the LDR; if False, report co-pol
         and cross-pol NRB separately (plus LDR).
+    fully_linear_pulses : bool, optional
+        True for fully linearly polarized transmitted pulses; False
+        (default) for the hybrid approach (linear and circular)
+        used by the MPL and mini-MPL.  Selects the LDR and total
+        NRB formulas in :func:`compute_nrb_dataset`.
 
     Returns
     -------
@@ -521,6 +527,7 @@ def load_and_process_arm_data(
                     deadtime_poly_degree=deadtime_poly_degree,
                     deadtime_n_extrap_samples=deadtime_n_extrap_samples,
                     total_nrb=total_nrb,
+                    fully_linear_pulses=fully_linear_pulses,
                 )
             except FileNotFoundError as exc:
                 warnings.warn(f"[{instr}] skipped — {exc}", stacklevel=2)
@@ -610,8 +617,8 @@ def load_and_process_arm_data(
     # ------------------------------------------------------------------
     native_time_res = _native_time_res_str(ds.time.values)
     native_range_res = (
-        _native_range_res_str(ds["range"], range_units)
-        if "range" in ds.coords else "unknown"
+        _native_range_res_str(ds[range_nif], range_units)
+        if range_nif in ds.variables else "unknown"
     )
 
     # ------------------------------------------------------------------
@@ -677,6 +684,7 @@ def load_and_process_arm_data(
             deadtime_poly_degree=deadtime_poly_degree,
             deadtime_n_extrap_samples=deadtime_n_extrap_samples,
             total_nrb=total_nrb,
+            fully_linear_pulses=fully_linear_pulses,
         )
 
         # Propagate source attributes; read from any variable in ds since
